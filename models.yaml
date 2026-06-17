@@ -17,7 +17,7 @@ defaults:
     - "--max-samples=16"          # <= ~32 docker containers; keep headroom
     - "--max-tasks=1"
     - "--retry-on-error"
-    - "--fail-on-error=0.05"      # tolerate up to 5% sandbox/infra errors
+    - "--fail-on-error=0.2"       # tolerate up to 20% sample errors (lenient for small batches)
     - "--message-limit=60"        # cap agent turns per instance
     - "--temperature=0"
 

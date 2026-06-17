@@ -1,9 +1,14 @@
-# Model sweep config. The ONLY things that change per model are the `model`
-# string and that model's `env`. Same task, same flags, same grader for all.
+# Model sweep config. The model `model` string, `env`, and `solver_args` vary per
+# model; the task, grader, and run flags are otherwise shared.
 #
 #   enabled: true|false   -> include in `python scripts/run_sweep.py` (override with --only)
 #   env values like ${VAR} are resolved from your .env / shell environment.
-#   solver_args            -> extra `-M key=value` model args (e.g. emulate_tools).
+#   solver_args            -> per-model flags appended after the global ones, e.g.
+#                             `-M key=value` model args AND concurrency overrides.
+#
+# CONCURRENCY is per-model (not global): Azure deployments get a moderate value tuned
+# to the TPM quota (too high -> 429 storms); local Ollama models get 1 (a 24B model at
+# 32K context can only run one generation at a time on a 24 GB GPU without OOM).
 #
 # Azure --model prefixes:  GPT -> openai/azure/<dep> ; Llama/Phi -> azureai/<dep>
 #                          Mistral -> mistral/azure/<dep> ; Claude -> anthropic/azure/<dep>
@@ -13,26 +18,21 @@ defaults:
   limit: 5                        # cheap smoke run; set to "none" (or --limit none) for all 500
   log_dir: logs
   flags:
-    - "--max-connections=16"      # API concurrency
-    - "--max-samples=16"          # <= ~32 docker containers; keep headroom
     - "--max-tasks=1"
     - "--retry-on-error"
     - "--fail-on-error=0.2"       # tolerate up to 20% sample errors (lenient for small batches)
     - "--message-limit=60"        # cap agent turns per instance
-    - "--temperature=0"
+    - "--temperature=0"           # auto-dropped for reasoning models (harmless)
+    - "--sample-shuffle=42"       # reproducible representative random sample (seed 42), shared across models
 
 models:
   # ---- Azure AI Foundry: standard GPT-5.4 (PREFERRED for agentic benchmarking) -----
-  # Deploy a NON-pro gpt-5.4 (or gpt-5.4-mini) in the SAME Foundry resource, then put its
-  # deployment name below and set enabled: true. Same key/base URL/api-version -> NO .env change.
-  # Standard gpt-5.4 supports sync + parallel tool calls (~$2.50/$15 per 1M vs pro's $30/$180).
+  # Standard gpt-5.4: Responses API auto-selected, native tool calls, ~$2.50/$15 per 1M.
+  # max-connections=12 was clean under the raised TPM quota; lower it if you hit 429s.
   - name: azure-gpt54
     model: openai/azure/gpt-5.4
     enabled: true
-    # Reasoning model: Responses API auto-selected; --temperature auto-dropped (global temp=0 is
-    # harmless). reasoning-effort=medium is the recommended agentic default; background=false is a
-    # defensive guard against the pro background-mode hang.
-    solver_args: ["-M", "responses_api=true", "-M", "background=false", "--reasoning-effort=medium", "--max-tokens=64000"]
+    solver_args: ["-M", "responses_api=true", "-M", "background=false", "--reasoning-effort=medium", "--max-tokens=64000", "--max-connections=12", "--max-samples=12"]
     env:
       AZUREAI_OPENAI_API_KEY: ${AZUREAI_OPENAI_API_KEY}
       AZUREAI_OPENAI_BASE_URL: ${AZUREAI_OPENAI_BASE_URL}
@@ -42,7 +42,7 @@ models:
   - name: azure-gpt54-mini
     model: openai/azure/gpt-5.4-mini
     enabled: true
-    solver_args: ["-M", "responses_api=true", "-M", "background=false", "--reasoning-effort=medium", "--max-tokens=64000"]
+    solver_args: ["-M", "responses_api=true", "-M", "background=false", "--reasoning-effort=medium", "--max-tokens=64000", "--max-connections=12", "--max-samples=12"]
     env:
       AZUREAI_OPENAI_API_KEY: ${AZUREAI_OPENAI_API_KEY}
       AZUREAI_OPENAI_BASE_URL: ${AZUREAI_OPENAI_BASE_URL}
@@ -54,7 +54,7 @@ models:
   - name: azure-gpt-pro
     model: openai/azure/gpt-5.4-pro
     enabled: false
-    solver_args: ["-M", "responses_api=true", "-M", "background=false", "--reasoning-effort=high", "--max-tokens=64000"]
+    solver_args: ["-M", "responses_api=true", "-M", "background=false", "--reasoning-effort=high", "--max-tokens=64000", "--max-connections=2", "--max-samples=2"]
     env:
       AZUREAI_OPENAI_API_KEY: ${AZUREAI_OPENAI_API_KEY}
       AZUREAI_OPENAI_BASE_URL: ${AZUREAI_OPENAI_BASE_URL}
@@ -64,18 +64,26 @@ models:
   - name: azure-llama70b
     model: azureai/REPLACE_WITH_YOUR_LLAMA_DEPLOYMENT
     enabled: false
+    solver_args: ["--max-connections=8", "--max-samples=8"]
     env:
       AZURE_API_KEY: ${AZURE_API_KEY}
       AZUREAI_BASE_URL: ${AZUREAI_BASE_URL}
 
-  # ---- Local: Ollama (already installed; path of least resistance) -----------
-  #  NOTE: a small local model will likely resolve ~0% of SWE-bench tasks — that
-  #  is EXPECTED. This entry validates the loop end-to-end (runs -> patches ->
-  #  scores). Use a strong Azure model for the resolve-rate ballpark check.
-  - name: local-ollama
-    model: ollama/mistral-small:24b   # already pulled on this box (also available: llama2:latest)
+  # ---- Local GENERALIST: Mistral Small 24B (not coding/agent-tuned) ----------
+  #  Kept as a contrast to the coding specialist below. Both share num_ctx=32768
+  #  (via Modelfile variants) so the comparison is model capability, not context.
+  - name: local-mistral-generalist
+    model: ollama/mistral-small-32k   # GENERALIST: mistral-small:24b + num_ctx 32768
     enabled: true
-    solver_args: ["-M", "emulate_tools=true"]   # ollama models lack native tool-calling
+    solver_args: ["-M", "emulate_tools=true", "--max-connections=1", "--max-samples=1"]   # 1 generation at a time (GPU)
+    env:
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+
+  # ---- Local SPECIALIST: Devstral Small 2 24B (Mistral, agentic-coding-tuned) ----
+  - name: local-devstral
+    model: ollama/devstral-32k        # SPECIALIST: devstral-small-2 + num_ctx 32768
+    enabled: true
+    solver_args: ["--max-connections=1", "--max-samples=1"]   # native tools; 1 generation at a time (GPU)
     env:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
 
@@ -83,7 +91,7 @@ models:
   - name: local-openai-api
     model: openai-api/local/REPLACE_WITH_SERVED_MODEL
     enabled: false
-    solver_args: ["-M", "emulate_tools=true"]
+    solver_args: ["-M", "emulate_tools=true", "--max-connections=1", "--max-samples=1"]
     env:
       LOCAL_BASE_URL: ${LOCAL_BASE_URL}
       LOCAL_API_KEY: ${LOCAL_API_KEY}

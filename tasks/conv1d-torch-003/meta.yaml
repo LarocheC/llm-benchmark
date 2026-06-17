@@ -1,0 +1,15 @@
+id: conv1d-torch-003
+title: "1-D convolution matching torch.nn.functional.conv1d"
+domain: deep-learning
+tier: hard
+created: "2026-06-17"
+private: true
+mode: codegen            # single-shot code generation (graded by harness/single_shot.py)
+language: python
+entry_point: conv1d
+n_cases: 64
+seed: 20260702
+comparison: allclose
+atol: 1e-9
+rtol: 1e-7
+problem_statement: problem.md

@@ -1,0 +1,15 @@
+id: mel-filterbank-003
+title: "Slaney mel filterbank (librosa.filters.mel)"
+domain: audio-features
+tier: hard
+created: "2026-06-17"
+private: true
+mode: codegen            # single-shot code generation (graded by harness/single_shot.py)
+language: python
+entry_point: mel_filterbank
+n_cases: 48
+seed: 20260704
+comparison: allclose
+atol: 1.0e-8
+rtol: 1.0e-6
+problem_statement: problem.md

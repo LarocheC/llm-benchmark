@@ -6,6 +6,40 @@ full-set run is required for that.
 
 ---
 
+## codegen-v3 — 2026-06-17 — finicky library-anchored tasks (top-frontier probe)
+
+Four rarer, deliberately finicky under-spec tasks added to try to separate gpt-5.4 from gpt-5.4-mini —
+each names a specific library function, pins only the arbitrary choices, and omits the method; the numpy
+reference is verified **bit-exact against the real library** (scipy / torch / librosa), sandbox stays numpy-only.
+Difficulty was spanned moderate → genuinely obscure: `dct2-ortho-003` (scipy.fft.dct type-2 norm='ortho'),
+`conv1d-torch-003` (F.conv1d groups/dilation), `interp1d-align-003` (F.interpolate align_corners half-pixel),
+`mel-filterbank-003` (librosa.filters.mel Slaney mel + Slaney area norm).
+
+Single-shot scores on the 4 finicky tasks:
+
+| model | dct-ortho | conv1d | interp-align | mel-fbank | mean |
+|---|---|---|---|---|---|
+| `openai/azure/gpt-5.4` | 1.000 | 1.000 | 1.000 | 1.000 | **1.000** |
+| `openai/azure/gpt-5.4-mini` | 1.000 | 1.000 | 1.000 | 1.000 | **1.000** |
+| `ollama/devstral-small-2` (24B) | 0.000 | 0.078 | 0.516 | 0.000 | 0.148 |
+| `ollama/mistral-small` (24B) | 0.000 | 0.016 | 0.516 | 0.000 | 0.133 |
+
+**Takeaways**
+- **Convention recall does not separate the top frontier, at any obscurity level.** Both frontier models score a
+  flat 1.000 even on the Slaney mel filterbank and DCT-II ortho normalization that the 24B models score 0.000 on.
+  The gap is exactly 1.000 vs 1.000 — not a small unresolved gap, so more seeds/samples won't surface a signal.
+- These tasks are genuinely hard (locals confirm) but the conventions live in scipy/torch/librosa, which are
+  saturated in frontier training data. Convention-recall tasks discriminate **capable vs not**, never **top vs top**.
+- Local detail: both 24B models sit at 0.516 on `interp-align` — they get `align_corners=True` (simple formula)
+  and miss `align_corners=False` (the half-pixel transform), landing at ~half.
+- **Conclusion: the top-frontier separator is NOT convention recall — it is intrinsic difficulty.** Next levers:
+  performance-constrained tasks (correctness × speedup — the kernel track), or multi-step composite algorithms /
+  novel non-memorizable conventions where the work is in derivation, not recall.
+
+**Reproduce:** `uv run python scripts/run_sweep.py --task harness/single_shot.py --log-dir logs/codegen-v3 --limit none`
+
+---
+
 ## codegen-agentic-v1 — 2026-06-17 — same codegen tasks, single-shot vs agentic
 
 The 8 codegen tasks (4 full-spec + 4 under-spec `-us`) run a second way: `harness/agentic_codegen.py`

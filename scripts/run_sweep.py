@@ -34,6 +34,10 @@ def main() -> None:
     ap.add_argument("--config", default=str(ROOT / "models.yaml"))
     ap.add_argument("--only", help="comma-separated model names (overrides 'enabled' flags)")
     ap.add_argument("--limit", help="override defaults.limit (int, or 'none' for the full set)")
+    ap.add_argument("--task", default=None,
+                    help="override defaults.task (e.g. harness/private_tasks.py for the private split)")
+    ap.add_argument("--log-dir", default=None,
+                    help="override the base log dir (relative to repo root), e.g. logs/private")
     ap.add_argument("--solver", default=os.environ.get("SOLVER", ""),
                     help="custom agent solver pkg/name for the agent-under-test track")
     ap.add_argument("--dry-run", action="store_true", help="print commands, don't execute")
@@ -54,8 +58,8 @@ def main() -> None:
 
     cfg = yaml.safe_load(Path(args.config).read_text())
     defaults = cfg.get("defaults", {})
-    task = defaults.get("task", "inspect_evals/swe_bench")
-    log_root = ROOT / defaults.get("log_dir", "logs")
+    task = args.task or defaults.get("task", "inspect_evals/swe_bench")
+    log_root = ROOT / (args.log_dir or defaults.get("log_dir", "logs"))
     flags = list(defaults.get("flags", []))
 
     if args.limit is not None:

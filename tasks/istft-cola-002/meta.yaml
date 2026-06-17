@@ -1,0 +1,15 @@
+id: istft-cola-002
+title: "Inverse STFT with COLA squared-window normalization"
+domain: dsp
+tier: hard
+created: "2026-06-17"
+private: true
+mode: codegen            # single-shot code generation (graded by harness/single_shot.py)
+language: python
+entry_point: istft
+n_cases: 80
+seed: 20260619
+comparison: allclose     # float64 output compared within tolerance
+atol: 1e-8
+rtol: 1e-6
+problem_statement: problem.md

@@ -1,0 +1,13 @@
+# secrets & local config
+.env
+
+# eval outputs (large; regenerate by running)
+logs/
+
+# python / uv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# keep uv.lock committed for reproducibility (do NOT ignore it)

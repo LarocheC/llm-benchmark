@@ -1,0 +1,20 @@
+[project]
+name = "llm-coding-benchmark"
+version = "0.0.1"
+description = "Benchmark harness comparing LLMs / LLM coding agents. v0: SWE-bench Verified reuse loop via Inspect AI, multi-provider (Azure AI Foundry + local)."
+requires-python = ">=3.11"
+dependencies = [
+    "inspect-ai",
+    "inspect-evals[swe_bench]",
+    "openai",            # openai/, openai/azure/, openai-api/, ollama/ (OpenAI-compatible) paths
+    "azure-ai-inference", # azureai/ Foundry/Inference path
+    "azure-identity",    # keyless / Entra ID (managed identity) auth
+    "python-dotenv",     # load .env in the driver/preflight
+    "pyyaml",            # models.yaml sweep config
+]
+
+# vLLM is intentionally NOT a dependency (multi-GB, GPU-specific). Add it when you
+# want to self-host bigger models than Ollama handles:  uv add vllm
+
+[tool.uv]
+package = false

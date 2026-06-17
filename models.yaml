@@ -1,0 +1,60 @@
+# Model sweep config. The ONLY things that change per model are the `model`
+# string and that model's `env`. Same task, same flags, same grader for all.
+#
+#   enabled: true|false   -> include in `python scripts/run_sweep.py` (override with --only)
+#   env values like ${VAR} are resolved from your .env / shell environment.
+#   solver_args            -> extra `-M key=value` model args (e.g. emulate_tools).
+#
+# Azure --model prefixes:  GPT -> openai/azure/<dep> ; Llama/Phi -> azureai/<dep>
+#                          Mistral -> mistral/azure/<dep> ; Claude -> anthropic/azure/<dep>
+
+defaults:
+  task: inspect_evals/swe_bench   # defaults to SWE-bench Verified (princeton-nlp/SWE-bench_Verified)
+  limit: 5                        # cheap smoke run; set to "none" (or --limit none) for all 500
+  log_dir: logs
+  flags:
+    - "--max-connections=16"      # API concurrency
+    - "--max-samples=16"          # <= ~32 docker containers; keep headroom
+    - "--max-tasks=1"
+    - "--retry-on-error"
+    - "--fail-on-error=0.05"      # tolerate up to 5% sandbox/infra errors
+    - "--message-limit=60"        # cap agent turns per instance
+    - "--temperature=0"
+
+models:
+  # ---- Azure AI Foundry: GPT (Azure OpenAI path) -----------------------------
+  - name: azure-gpt
+    model: openai/azure/REPLACE_WITH_YOUR_GPT_DEPLOYMENT
+    enabled: false
+    env:
+      AZUREAI_OPENAI_API_KEY: ${AZUREAI_OPENAI_API_KEY}
+      AZUREAI_OPENAI_BASE_URL: ${AZUREAI_OPENAI_BASE_URL}
+      AZUREAI_OPENAI_API_VERSION: ${AZUREAI_OPENAI_API_VERSION}
+
+  # ---- Azure AI Foundry: Llama/Phi/generic (azureai path) --------------------
+  - name: azure-llama70b
+    model: azureai/REPLACE_WITH_YOUR_LLAMA_DEPLOYMENT
+    enabled: false
+    env:
+      AZURE_API_KEY: ${AZURE_API_KEY}
+      AZUREAI_BASE_URL: ${AZUREAI_BASE_URL}
+
+  # ---- Local: Ollama (already installed; path of least resistance) -----------
+  #  NOTE: a small local model will likely resolve ~0% of SWE-bench tasks — that
+  #  is EXPECTED. This entry validates the loop end-to-end (runs -> patches ->
+  #  scores). Use a strong Azure model for the resolve-rate ballpark check.
+  - name: local-ollama
+    model: ollama/mistral-small:24b   # already pulled on this box (also available: llama2:latest)
+    enabled: true
+    solver_args: ["-M", "emulate_tools=true"]   # ollama models lack native tool-calling
+    env:
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+
+  # ---- Local: generic OpenAI-compatible server (vLLM/TGI/llama.cpp) ----------
+  - name: local-openai-api
+    model: openai-api/local/REPLACE_WITH_SERVED_MODEL
+    enabled: false
+    solver_args: ["-M", "emulate_tools=true"]
+    env:
+      LOCAL_BASE_URL: ${LOCAL_BASE_URL}
+      LOCAL_API_KEY: ${LOCAL_API_KEY}

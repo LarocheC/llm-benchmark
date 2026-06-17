@@ -49,6 +49,14 @@ def _load_tasks():
             for f in sorted(hidden_dir.rglob("*.py")):
                 rel = f.relative_to(d).as_posix()          # e.g. hidden_tests/test_power_assoc.py
                 hidden[f"{WORKDIR}/{rel}"] = f.read_text()
+        # Canonical PASS_TO_PASS test files, read from the pristine repo/. Restored into the sandbox
+        # at scoring time so the agent cannot weaken or delete the regression tests to game the score.
+        canonical = {}
+        for t in meta.get("pass_to_pass", []):
+            rel = t.split("::", 1)[0]                       # "tests/x.py::test_y" -> "tests/x.py"
+            src = d / "repo" / rel
+            if src.exists():
+                canonical[f"{WORKDIR}/{rel}"] = src.read_text()
         samples.append(
             Sample(
                 id=meta["id"],
@@ -58,6 +66,7 @@ def _load_tasks():
                     "pass_to_pass": meta.get("pass_to_pass", []),
                     "test_cmd": meta.get("test_cmd", "python -m pytest -q"),
                     "hidden_tests": hidden,
+                    "canonical_tests": canonical,
                 },
                 sandbox=SandboxEnvironmentSpec(type="docker", config=str(d / "compose.yaml")),
             )
@@ -78,7 +87,10 @@ async def _run_pytest(targets, test_cmd):
 def private_task_scorer():
     async def score(state: TaskState, target: Target) -> Score:
         md = state.metadata
-        # Inject the hidden FAIL_TO_PASS tests (write_file auto-creates parent dirs).
+        # Restore canonical PASS_TO_PASS test files from the pristine repo (defeat test-file
+        # tampering), then inject the hidden FAIL_TO_PASS tests. write_file auto-creates parent dirs.
+        for path, contents in md.get("canonical_tests", {}).items():
+            await sandbox().write_file(path, contents)
         for path, contents in md["hidden_tests"].items():
             await sandbox().write_file(path, contents)
         # Run FAIL_TO_PASS and PASS_TO_PASS separately; BOTH must fully pass (regression guard).

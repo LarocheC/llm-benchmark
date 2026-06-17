@@ -6,6 +6,50 @@ full-set run is required for that.
 
 ---
 
+## codegen-agentic-v1 — 2026-06-17 — same codegen tasks, single-shot vs agentic
+
+The 8 codegen tasks (4 full-spec + 4 under-spec `-us`) run a second way: `harness/agentic_codegen.py`
+puts the model in a `react()` loop (bash/editor/python). The agent writes `/work/solution.py` and
+iterates against a **disjoint set of 12 public example cases** via `/work/check.py` (pass/fail only — no
+expected-vs-got); **final scoring uses the same hidden seed/n_cases as single-shot**, so per-task scores
+are directly comparable and the gap is the metric. The gold reference is written into the sandbox only to
+generate the public examples, then deleted before the agent runs (it never sees the gold or hidden cases);
+public seed = hidden seed + 1000003, so hard-coding public pairs does not generalize. Sandbox is numpy-only.
+
+Mean score per model — **S** = single-shot (codegen-v2), **A** = agentic — over full-spec (4), under-spec (4), all (8):
+
+| model | S full | S under | S all | A full | A under | A all |
+|---|---|---|---|---|---|---|
+| `openai/azure/gpt-5.4` | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
+| `openai/azure/gpt-5.4-mini` | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 | 1.00 |
+| `ollama/devstral-small-2` (specialist) | 1.00 | **0.24** | 0.62 | 1.00 | **1.00** | **1.00** |
+| `ollama/mistral-small` (generalist) | 1.00 | **0.02** | 0.51 | **0.79** | **0.28** | **0.53** |
+
+Notable per-task gaps (|A−S| ≥ 0.3):
+- **Devstral recovers everything under-spec:** qlin-us 0.02→1.00, istft-us 0→1.00, gru-us 0→1.00.
+- **Mistral qgemm-us 0→0.94** (recovered the simplest convention from examples), but **qlin 1.00→0.17 (regression)** and istft-us/gru-us stay 0.
+
+**Takeaways**
+- **Agentic mode separates the two local models that single-shot under-spec could not** (both were ~0 under-spec).
+  Given public examples + iteration, the **specialist** Devstral reverse-engineers every convention it lacked
+  a priori → 1.00; the **generalist** Mistral gets no net lift (0.51→0.53). The single-shot↔agentic gap is the
+  agentic-coding-competence axis, and it tracks the SWE-bench specialist≫generalist result.
+- **The gap is signed — agentic is not strictly better.** Mistral's `qlin` went 1.00→0.17: this generalisation
+  produced the zero-point **wraparound** bug `(A - a_zp).astype(int32)` (subtract in uint8 then cast → `10-128`
+  wraps to `138`) instead of `A.astype(int32) - a_zp`; it then ran 28 edit→check cycles stuck at 1/12 public
+  (no expected-vs-got feedback to climb), and hit the 60-message limit. Confirmed by reproduction: the buggy
+  form scores exactly 1/12 public, 16/96 hidden; the cast-first fix scores 12/12, 96/96. A weak generalist in a
+  blind agent loop can underperform its own one-shot.
+- **Frontier API ties at 1.0 in both modes** — agentic does not separate gpt-5.4 from mini (they already know
+  every convention; the loop adds nothing). Separating the top frontier still needs rarer conventions.
+- **Caveat:** n=1 trajectory per (model, task) → regression *magnitude* is run-to-run variable, but the
+  mechanism is grounded. `check.py` gives pass/fail only by design (measures **unaided** debugging); a
+  richer-feedback variant (expected-vs-got on first failure) would measure oracle-assisted debugging.
+
+**Reproduce:** `uv run python scripts/run_sweep.py --task harness/agentic_codegen.py --log-dir logs/codegen-agentic-v1 --limit none`
+
+---
+
 ## codegen-v2 — 2026-06-17 — private single-shot codegen, spec-level experiment
 
 **The key finding so far: the discriminating variable is the prompt's specification level, not the math.**

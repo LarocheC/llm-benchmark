@@ -44,6 +44,9 @@ def _pytest(image, setup_sh, targets):
 def check_task(d: Path) -> bool:
     meta = yaml.safe_load((d / "meta.yaml").read_text())
     tid = meta["id"]
+    if meta.get("mode", "agentic") != "agentic":
+        print(f"[{tid}] skipped (mode={meta.get('mode')}; gated separately by single_shot)\n")
+        return True
     f2p, p2p = meta.get("fail_to_pass", []), meta.get("pass_to_pass", [])
     image = f"privtask-{tid}".lower()
 

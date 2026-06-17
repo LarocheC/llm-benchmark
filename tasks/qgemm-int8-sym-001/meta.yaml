@@ -1,0 +1,13 @@
+id: qgemm-int8-sym-001
+title: "Symmetric per-tensor int8 GEMM with requantization"
+domain: quantization
+tier: medium
+created: "2026-06-17"
+private: true
+mode: codegen            # single-shot code generation (graded by harness/single_shot.py)
+language: python
+entry_point: qgemm
+n_cases: 64
+seed: 20260617
+comparison: exact        # bit-exact integer output vs the reference
+problem_statement: problem.md

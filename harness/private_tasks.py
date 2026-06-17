@@ -41,6 +41,8 @@ def _load_tasks():
     samples = []
     for d in sorted(p for p in TASKS_ROOT.iterdir() if p.is_dir() and (p / "meta.yaml").exists()):
         meta = yaml.safe_load((d / "meta.yaml").read_text())
+        if meta.get("mode", "agentic") != "agentic":
+            continue  # non-agentic tasks (e.g. mode: codegen) are handled by harness/single_shot.py
         problem = (d / meta.get("problem_statement", "problem.md")).read_text()
         # Hidden FAIL_TO_PASS tests -> inject into the sandbox at /workspace/<relpath> at score time.
         hidden = {}

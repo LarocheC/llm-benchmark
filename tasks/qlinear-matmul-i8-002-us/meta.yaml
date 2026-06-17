@@ -1,0 +1,13 @@
+id: qlinear-matmul-i8-002-us
+title: "Asymmetric per-output-channel int8 QLinearMatMul with integer requantization (under-specified / knowledge-gated)"
+domain: quantization
+tier: hard
+created: "2026-06-17"
+private: true
+mode: codegen            # single-shot code generation (graded by harness/single_shot.py)
+language: python
+entry_point: qlinear_matmul
+n_cases: 96
+seed: 20260618
+comparison: exact        # bit-exact uint8 integer output vs the reference
+problem_statement: problem.md

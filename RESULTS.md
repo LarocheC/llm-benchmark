@@ -6,6 +6,50 @@ full-set run is required for that.
 
 ---
 
+## codegen-v2 — 2026-06-17 — private single-shot codegen, spec-level experiment
+
+**The key finding so far: the discriminating variable is the prompt's specification level, not the math.**
+
+Single-shot codegen tasks (`harness/single_shot.py`): the model emits one `python` function; a hidden
+reference is run against it over 64–96 seeded random cases in a numpy Docker sandbox; score = fraction of
+cases matching (bit-exact for int outputs, `allclose` for float). Four domain tasks, each in two prompt
+variants that share the **same reference, same seeded cases, same grader** — only the prompt differs:
+- **full-spec:** the exact formula/recipe is written out step by step (unambiguous → transcription).
+- **under-spec (`-us`):** names the standard (`torch.nn.GRU`, ONNX `QLinearMatMul`, WOLA/Griffin-Lim COLA,
+  symmetric int8 GEMM), pins only the *arbitrary* choices (signature, dtypes, output length, epsilon, weight
+  layout), and **omits the method** — the model must supply the convention from knowledge. Each `-us` prompt
+  was expert-verified: an independent expert impl from the prose alone reproduces the reference (0 mismatches),
+  and the reference is confirmed bit-identical to the *real* library (torch / scipy+librosa / onnxruntime).
+
+| model | qgemm | qlin | istft | gru | qgemm-us | qlin-us | istft-us | gru-us |
+|---|---|---|---|---|---|---|---|---|
+| `openai/azure/gpt-5.4` | 1.00 | 1.00 | 1.00 | 1.00 | **1.00** | **1.00** | **1.00** | **1.00** |
+| `openai/azure/gpt-5.4-mini` | 1.00 | 1.00 | 1.00 | 1.00 | **1.00** | **1.00** | **1.00** | **1.00** |
+| `ollama/devstral-small-2` (local 24B) | 1.00 | 1.00 | 1.00 | 1.00 | **0.94** | **0.02** | **0.00** | **0.00** |
+| `ollama/mistral-small` (local 24B) | 1.00 | 1.00 | 1.00 | 1.00 | **0.00** | **0.08** | **0.00** | **0.00** |
+
+(tasks: `qgemm`=symmetric per-tensor int8 GEMM; `qlin`=ONNX per-channel int8 QLinearMatMul w/ zero-points;
+`istft`=inverse STFT w/ COLA squared-window normalization; `gru`=streaming PyTorch GRU. `-us`=under-specified.)
+
+**Takeaways**
+- **Full-spec saturates *every* model** — even the generalist that scores 10% on SWE-bench gets 100%. A
+  fully-specified numerical spec is a transcription task; transcription into numpy is easy for all of them.
+  The wrong-convention discrimination measured during authoring proves the *scorer* separates conventions, but
+  models never pick a wrong convention when handed the right one.
+- **Under-spec cleanly separates frontier-API from local-24B.** gpt-5.4 / mini know every convention cold and
+  stay at 1.0; both 24B local models collapse. The gradient ranks conventions by how widely-known they are:
+  Devstral half-knows symmetric int8 GEMM (0.94) but is near-zero on per-channel ONNX quant (0.02), WOLA-COLA
+  (0.00), and exact GRU equations (0.00).
+- **gpt-5.4 vs gpt-5.4-mini still tie at 1.0** on this set → these standard conventions don't yet separate the
+  *top* frontier. Separating the top needs rarer/finickier conventions (scipy-vs-librosa istft padding, ORT
+  even-rounding edges, fixed-point Q-format overflow, GPTQ/per-group quant) and/or a per-task **spec-level
+  ladder** (full → named-standard → minimal → name-only) to turn each task into a sensitivity curve.
+
+**Reproduce:** `uv run python scripts/run_sweep.py --task harness/single_shot.py --log-dir logs/codegen-v2 --limit none`
+(well-formedness gate: `uv run python harness/check_codegen.py`). codegen-v1 was the full-spec-only precursor.
+
+---
+
 ## calib-v1 — 2026-06-17 — SWE-bench Verified, representative random sample
 
 - **Sample:** `--sample-shuffle 42 --limit N` → a reproducible random sample across all repos

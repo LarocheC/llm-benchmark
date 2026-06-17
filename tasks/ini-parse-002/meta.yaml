@@ -1,0 +1,27 @@
+id: ini-parse-002
+title: "INI values containing '=' are truncated at the first '='"
+domain: parsing
+tier: medium
+created: "2026-06-17"
+private: true
+provenance: "hand-authored original; never published"
+language: python
+
+# Command prefix the scorer uses (run from /workspace inside the sandbox).
+test_cmd: "python -m pytest -q"
+
+# Natural-language issue shown to the agent.
+problem_statement: problem.md
+
+# Tests that must flip fail -> pass. Hidden from the agent; injected at scoring time
+# from hidden_tests/ into the sandbox at /workspace/hidden_tests/.
+fail_to_pass:
+  - "hidden_tests/test_equals_in_value.py"
+
+# Existing tests that must stay green (regression guard); already present in repo/.
+pass_to_pass:
+  - "tests/test_basic.py"
+
+# Gold fix, mirrors repo/ layout. Used ONLY by the well-formedness gate — never shipped to the agent.
+solution_files:
+  - "iniparse/parser.py"

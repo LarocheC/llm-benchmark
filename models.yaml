@@ -22,10 +22,39 @@ defaults:
     - "--temperature=0"
 
 models:
-  # ---- Azure AI Foundry: GPT (Azure OpenAI path) -----------------------------
-  - name: azure-gpt
-    model: openai/azure/REPLACE_WITH_YOUR_GPT_DEPLOYMENT
+  # ---- Azure AI Foundry: standard GPT-5.4 (PREFERRED for agentic benchmarking) -----
+  # Deploy a NON-pro gpt-5.4 (or gpt-5.4-mini) in the SAME Foundry resource, then put its
+  # deployment name below and set enabled: true. Same key/base URL/api-version -> NO .env change.
+  # Standard gpt-5.4 supports sync + parallel tool calls (~$2.50/$15 per 1M vs pro's $30/$180).
+  - name: azure-gpt54
+    model: openai/azure/gpt-5.4
+    enabled: true
+    # Reasoning model: Responses API auto-selected; --temperature auto-dropped (global temp=0 is
+    # harmless). reasoning-effort=medium is the recommended agentic default; background=false is a
+    # defensive guard against the pro background-mode hang.
+    solver_args: ["-M", "responses_api=true", "-M", "background=false", "--reasoning-effort=medium", "--max-tokens=64000"]
+    env:
+      AZUREAI_OPENAI_API_KEY: ${AZUREAI_OPENAI_API_KEY}
+      AZUREAI_OPENAI_BASE_URL: ${AZUREAI_OPENAI_BASE_URL}
+      AZUREAI_OPENAI_API_VERSION: ${AZUREAI_OPENAI_API_VERSION}
+
+  # ---- Azure AI Foundry: GPT-5.4-mini (cheap second data point) --------------------
+  - name: azure-gpt54-mini
+    model: openai/azure/gpt-5.4-mini
+    enabled: true
+    solver_args: ["-M", "responses_api=true", "-M", "background=false", "--reasoning-effort=medium", "--max-tokens=64000"]
+    env:
+      AZUREAI_OPENAI_API_KEY: ${AZUREAI_OPENAI_API_KEY}
+      AZUREAI_OPENAI_BASE_URL: ${AZUREAI_OPENAI_BASE_URL}
+      AZUREAI_OPENAI_API_VERSION: ${AZUREAI_OPENAI_API_VERSION}
+
+  # ---- Azure AI Foundry: GPT-5.4-PRO (PARKED: slow + ~12x cost, ill-suited to agent loops) ----
+  # Pro is Responses-only, forces reasoning_effort=high, no parallel tool calls, and sync calls
+  # risk timeouts on hard instances. Use only for a separate single-shot "hardest problems" run.
+  - name: azure-gpt-pro
+    model: openai/azure/gpt-5.4-pro
     enabled: false
+    solver_args: ["-M", "responses_api=true", "-M", "background=false", "--reasoning-effort=high", "--max-tokens=64000"]
     env:
       AZUREAI_OPENAI_API_KEY: ${AZUREAI_OPENAI_API_KEY}
       AZUREAI_OPENAI_BASE_URL: ${AZUREAI_OPENAI_BASE_URL}
